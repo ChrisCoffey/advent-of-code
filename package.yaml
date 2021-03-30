@@ -1,0 +1,65 @@
+name:                aoc
+version:             0.1.0.0
+github:              "ChrisCoffey/aoc"
+license:             MIT
+author:              "Chris Coffey"
+maintainer:          "chris@coffey.dev"
+copyright:           "2021 Chris Coffey"
+
+description:         Please see the README on GitHub at <https://github.com/ChrisCoffey/aoc#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- protolude
+- bytestring
+- hashtables
+- text
+- matrix
+- vector
+- containers
+- unordered-containers
+- mtl
+- hashable
+- array
+
+default-extensions:
+  MultiParamTypeClasses
+  OverloadedStrings
+  FlexibleContexts
+  FlexibleInstances
+  NamedFieldPuns
+  TupleSections
+  DeriveGeneric
+  DeriveAnyClass
+  GeneralizedNewtypeDeriving
+  DerivingStrategies
+  FunctionalDependencies
+  TypeApplications
+  UndecidableInstances
+  GADTs
+  ConstraintKinds
+  NoImplicitPrelude
+  ScopedTypeVariables
+
+library:
+  source-dirs: src
+
+tests:
+  aoc:
+    main:                Spec.hs
+    source-dirs:         test
+    other-modules:
+        IndexedTests
+        NQueensTests
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - algo-study
+    - tasty
+    - tasty-hunit
+    - tasty-quickcheck
+    - quickcheck-instances
+    - QuickCheck
+    - HUnit

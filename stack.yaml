@@ -1,0 +1,6 @@
+resolver: lts-16.31
+
+# Local packages, usually specified by relative directory name
+packages:
+- '.'
+
