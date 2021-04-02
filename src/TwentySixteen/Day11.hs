@@ -28,6 +28,15 @@ floorFromState ::
   -> [Thing]
 floorFromState s floorNum = bsFloors s M.! floorNum
 
+terminalState ::
+  BoardState
+  -> Bool
+terminalState state =
+  (elevator state == 3) &&
+  null (bsFloors state M.! 0) &&
+  null (bsFloors state M.! 1) &&
+  null (bsFloors state M.! 2)
+
 type StateGraph = Map BoardState [BoardState]
 
 newtype Floor = Floor [Thing]
@@ -55,21 +64,39 @@ matchedPair (Generator a) (Chip b) = a == b
 matchedPair (Chip a) (Generator b) = a == b
 matchedPair _ _ = False
 
+
+-- a BFS search through a move graph
+findShortestPath ::
+  StateGraph
+  -> BoardState
+  -> Int
+findShortestPath graph initialState =
+  go (S.singleton (initialState, 0))
+  where
+    go ((s, dist) S.:<| frontier)
+      | terminalState s = dist
+      | otherwise = let
+        edges = graph M.! s
+        frontierStates = fst <$> frontier
+        novelStates = filter (`notElem` frontierStates) edges
+        withDistances = (, dist +1) <$> novelStates
+        in go (frontier S.>< S.fromList withDistances)
+
 createMoveGraph ::
   BoardState
   -> StateGraph
 createMoveGraph initialState =
   go (S.singleton initialState) M.empty
   where
-    go frontierStates stateGraph
-      | S.null frontierStates = stateGraph
+    go S.Empty stateGraph = stateGraph
+    go (s S.:<| frontierStates) stateGraph
+      | terminalState s = stateGraph
       | otherwise = let
-        (s S.:< remainingStates) = S.viewl frontierStates
         focusedFloor = floorFromState s $ elevator s
         maxFloor = 3
         minFloor = 0
 
-        moveList tupled single = (toList <$> tupled) <> ((: []) <$> single)
+        moveList tupled single = ((\(a,b) -> [a, b]) <$> tupled) <> ((: []) <$> single)
 
         (upwardPairs, upwardSingle) =
           if elevator s < maxFloor
@@ -92,7 +119,7 @@ createMoveGraph initialState =
         novelStates = filter (\k -> not $ k `M.member` stateGraph) (upwardStates <> downwardStates)
         stateGraph' = foldl (addStateToGraph s) stateGraph novelStates
 
-        updatedFrontier = remainingStates S.>< S.fromList novelStates
+        updatedFrontier = frontierStates S.>< S.fromList novelStates
         in go updatedFrontier stateGraph'
 
 addStateToGraph ::
