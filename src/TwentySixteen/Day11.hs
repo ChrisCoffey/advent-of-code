@@ -6,6 +6,7 @@ module TwentySixteen.Day11 (
 import Protolude
 import qualified Data.Map as M
 import qualified Data.List as L
+import qualified Data.Sequence as S
 
 import Utils
 
@@ -18,8 +19,16 @@ part1 = pure 42
 part2 :: IO Int
 part2 = pure 42
 
-data Elevator = Elevator {eMoves:: Int, eFloor:: Int}
-  deriving (Show, Eq)
+data BoardState = BS {bsFloors :: Map Int [Thing], elevator:: Int}
+  deriving (Show, Eq, Ord)
+
+floorFromState ::
+  BoardState
+  -> Int
+  -> [Thing]
+floorFromState s floorNum = bsFloors s M.! floorNum
+
+type StateGraph = Map BoardState [BoardState]
 
 newtype Floor = Floor [Thing]
   deriving (Show, Eq)
@@ -46,83 +55,94 @@ matchedPair (Generator a) (Chip b) = a == b
 matchedPair (Chip a) (Generator b) = a == b
 matchedPair _ _ = False
 
-
-solve ::
-  (Elevator, [Floor])
-  -> (Elevator, [Floor])
-solve input = let
-  output = uncurry makeAMove input
-  in if input == output
-     then output
-     else solve output
-
--- No branching yet
---
--- The guiding principle is to move all things from the lower floors to higher floors as quickly as possible
--- Because the elevator can only move one stop at a time, and the state must always be stable, it stands that
--- there is nothing to gain by jumping ahead. This necessitates the elevator moving backwards with nothing onboard,
--- which increases the move count unnecessarily. Backwards moves should be minimized, as should moves without any
--- cargo.
---
--- In fact, the goal should be to maximize the amount of cargo moved upwards on each turn
-makeAMove ::
-  Elevator
-  -> [Floor] -- Board state
-  -> (Elevator, [Floor]) -- Updated scores, elevator, and board state
-makeAMove elevator buildingState
-  | notEmpty lowerMoves = (Elevator {eMoves = eMoves elevator + 1, eFloor = focusedFloor - 1}, buildingState)
-  | notEmpty paired && not topFloor = let -- This is a situation where a zipper would be quite useful
-    -- update the two floors to reflect this move. Such a pain in the ass with persistent structures
-    (a,b) = L.head paired
-    (fl', fNext') = doMove a fl fNext
-    (fl'', fNext'') = doMove b fl' fNext'
-    buildingState' = (take focusedFloor buildingState)<>[fl'', fNext'']<>(drop (focusedFloor + 2) buildingState)
-    in (Elevator {eMoves = eMoves elevator + 1, eFloor = focusedFloor + 1}, buildingState')
-  | notEmpty single && not topFloor = let
-    a = L.head single
-    (fl', fNext') = doMove a fl fNext
-    buildingState' = (take focusedFloor buildingState)<>[fl', fNext']<>(drop (focusedFloor + 2) buildingState)
-    in (Elevator {eMoves = eMoves elevator + 1, eFloor = focusedFloor + 1}, buildingState')
-  | otherwise = (elevator, buildingState)
+createMoveGraph ::
+  BoardState
+  -> StateGraph
+createMoveGraph initialState =
+  go (S.singleton initialState) M.empty
   where
-    focusedFloor = eFloor elevator
-    topFloor = focusedFloor == length buildingState - 1
-    fl = buildingState L.!! focusedFloor
-    fNext = if topFloor
-            then fl
-            else buildingState L.!! (focusedFloor + 1)
-    (paired, single) = movesFromFloor fl fNext
+    go frontierStates stateGraph
+      | S.null frontierStates = stateGraph
+      | otherwise = let
+        (s S.:< remainingStates) = S.viewl frontierStates
+        focusedFloor = floorFromState s $ elevator s
+        maxFloor = 3
+        minFloor = 0
 
-    -- Evaluate speculative moves from lower floors. There can, in theory, be cargo on floors arbitrarily low, so
-    -- this needs to account for that possibility.
-    -- :: [(moves, (from, to))]
-    lowerMoves = [(moves, floorPairs) |
-      floorPairs <- floorMovePairs,
-      let moves = uncurry movesFromFloor floorPairs,
-      notEmpty (fst moves) || notEmpty (snd  moves)
-      ]
-    floorMovePairs = floorsToCurrent `zip` L.tail floorsToCurrent
-    floorsToCurrent = take (1 + focusedFloor) buildingState
+        moveList tupled single = (toList <$> tupled) <> ((: []) <$> single)
+
+        (upwardPairs, upwardSingle) =
+          if elevator s < maxFloor
+          then movesFromFloor focusedFloor (floorFromState s (elevator s + 1))
+          else ([], [])
+        upwardStates =
+          if elevator s < maxFloor
+          then updateState 1 s <$> moveList upwardPairs upwardSingle
+          else []
+
+        (downwardPairs, downwardSingle) =
+          if elevator s > minFloor
+          then movesFromFloor focusedFloor (floorFromState s (elevator s - 1))
+          else ([], [])
+        downwardStates =
+          if elevator s > minFloor
+          then updateState (-1) s <$> moveList downwardPairs downwardSingle
+          else []
+
+        novelStates = filter (\k -> not $ k `M.member` stateGraph) (upwardStates <> downwardStates)
+        stateGraph' = foldl (addStateToGraph s) stateGraph novelStates
+
+        updatedFrontier = remainingStates S.>< S.fromList novelStates
+        in go updatedFrontier stateGraph'
+
+addStateToGraph ::
+  BoardState -- Origin
+  -> StateGraph -- Graph
+  -> BoardState -- Destination
+  -> StateGraph
+addStateToGraph origin graph destination = let
+  graph' = M.insertWith (const identity ) destination [] graph
+  in M.insertWith (\new existing -> existing <> new) origin [destination] graph'
+
+
+updateState ::
+  Int -- Elevator change
+  -> BoardState -- starting state
+  -> [Thing] -- move
+  -> BoardState
+updateState elevatorChange startingState move =
+  BS {
+    elevator = elevator startingState + elevatorChange
+  , bsFloors = updatedFloors
+  }
+  where
+    floorNum = elevator startingState
+    targetNum =  floorNum + elevatorChange
+    startingFloor = (bsFloors startingState) M.! floorNum
+    targetFloor = (bsFloors startingState) M.! targetNum
+    (fromFloor, toFloor) = doMove move startingFloor targetFloor
+
+    updatedFloors = M.insert targetNum toFloor $
+      M.insert floorNum fromFloor (bsFloors startingState)
 
 doMove ::
-  Thing
-  -> Floor
-  -> Floor
-  -> (Floor, Floor)
-doMove t (Floor fromFloor) (Floor toFloor) =
-  (Floor $ filter (/= t) fromFloor, Floor (t:toFloor))
-
+  [Thing]
+  -> [Thing]
+  -> [Thing]
+  -> ([Thing], [Thing])
+doMove t fromFloor toFloor =
+  (filter (\a -> not $ a `elem` t) fromFloor, t<>toFloor)
 
 -- Determine which moves can be made between two floors
 movesFromFloor ::
-  Floor
-  -> Floor
+  [Thing]
+  -> [Thing]
   -> ([(Thing, Thing)], [Thing])
-movesFromFloor (Floor fromFloor) (Floor toFloor) =
+movesFromFloor fromFloor toFloor =
   (pairedMoves, singleMoves)
   where
-    singleMoves = filter (`canMove` Floor toFloor) fromFloor
-    pairedMoves = filter (`canMovePair` Floor toFloor) thingPairs
+    singleMoves = filter (`canMove` toFloor) fromFloor
+    pairedMoves = filter (`canMovePair` toFloor) thingPairs
 
     thingPairs = pairs fromFloor
 
@@ -132,9 +152,9 @@ movesFromFloor (Floor fromFloor) (Floor toFloor) =
 -- 3) The item being moved is a chip and its generator is on the target floor
 canMove ::
   Thing
-  -> Floor
+  -> [Thing]
   -> Bool
-canMove thing (Floor things) =
+canMove thing things =
   all isChip (thing:things) ||
   all isGenerator (thing:things) ||
   balanced
@@ -146,42 +166,47 @@ canMove thing (Floor things) =
 -- 2) Each element in the pair can move independently
 canMovePair ::
   (Thing, Thing)
-  -> Floor
+  -> [Thing]
   -> Bool
-canMovePair (a,b) (Floor things) =
+canMovePair (a,b) things =
   (matchedPair a b && (balanced || all isGenerator things) ) ||
-  (canMove a (Floor (b:things)) && canMove b (Floor (a:things)))
+  (canMove a (b:things) && canMove b (a:things))
   where
     balanced = all (\t -> any (matchedPair t) things) things
 
-problem1Input = [
-    Floor [
-        Chip "thulium"
-      , Generator "thulium"
-      , Generator "stronium"
-      , Generator "plutonium"
-    ]
-   ,Floor [
+problem1Input =
+  BS {
+    elevator = 0
+  , bsFloors = M.fromList [
+    (0, [
+          Chip "thulium"
+        , Generator "thulium"
+        , Generator "stronium"
+        , Generator "plutonium"
+      ]
+    ),
+    (1, [
         Chip "plutonium"
       , Chip "stronium"
-   ]
-   ,Floor [
+      ]
+    ),
+    (2, [
         Generator "promethium"
       , Chip "promethium"
       , Generator "ruthenium"
       , Chip "ruthenium"
+    ]),
+    (3, [])
     ]
-   ,Floor []
-  ]
+  }
 
-computeScores ::
-  [Floor]
-  -> Scores
-computeScores floors =
-  foldl distance (M.empty, distanceFromTop) floors & fst
-  where
-    distanceFromTop = length floors -1
-
-    distance :: (Scores, Int) -> Floor -> (Scores, Int)
-    distance (scores, remaining) (Floor fl) = (foldl (\m k -> M.insert k remaining m) scores fl, remaining - 1)
-
+testInput =
+  BS {
+    elevator = 0,
+    bsFloors = M.fromList [
+      (0, [Chip "h", Chip "l"])
+    , (1, [Generator "h"])
+    , (2, [Generator "l"])
+    , (3, [])
+    ]
+  }
