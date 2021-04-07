@@ -7,6 +7,7 @@ import Protolude
 import qualified Data.Map as M
 import qualified Data.List as L
 import qualified Data.Sequence as S
+import qualified Data.Set as Set
 
 import Utils
 
@@ -71,56 +72,60 @@ findShortestPath ::
   -> BoardState
   -> Int
 findShortestPath graph initialState =
-  go (S.singleton (initialState, 0))
+  go (S.singleton (initialState, 0)) Set.empty
   where
-    go ((s, dist) S.:<| frontier)
+    go ((s, dist) S.:<| frontier) seen
       | terminalState s = dist
       | otherwise = let
         edges = graph M.! s
         frontierStates = fst <$> frontier
-        novelStates = filter (`notElem` frontierStates) edges
+        novelStates = filter (`Set.notMember` seen) edges
         withDistances = (, dist +1) <$> novelStates
-        in go (frontier S.>< S.fromList withDistances)
+        f = if elevator s == 3
+            then traceShow (s, dist) go
+            else go
+        in go (frontier S.>< S.fromList withDistances) (Set.insert s seen)
+
+-- The current failure suggests that the graph is incomplete? How many nodes should/could it have?
 
 createMoveGraph ::
   BoardState
-  -> StateGraph
+  -> Int
 createMoveGraph initialState =
-  go (S.singleton initialState) M.empty
+  go (S.singleton (initialState, 0)) Set.empty
   where
-    go S.Empty stateGraph = stateGraph
-    go (s S.:<| frontierStates) stateGraph
-      | terminalState s = stateGraph
+    go S.Empty stateGraph = -1
+    go ((s, dist)  S.:<| frontierStates) seen
+      | terminalState s = dist
       | otherwise = let
-        focusedFloor = floorFromState s $ elevator s
-        maxFloor = 3
-        minFloor = 0
+          focusedFloor = floorFromState s $ elevator s
+          maxFloor = 3
+          minFloor = 0
 
-        moveList tupled single = ((\(a,b) -> [a, b]) <$> tupled) <> ((: []) <$> single)
+          (upwardPairs, upwardSingle) =
+            if elevator s < maxFloor
+            then movesFromFloor focusedFloor (floorFromState s (elevator s + 1))
+            else ([], [])
+          upwardStates =
+            if elevator s < maxFloor
+            then updateState 1 s <$> moveList upwardPairs (if L.null upwardPairs then upwardSingle else []) -- Only move pairs up if possible
+            else []
 
-        (upwardPairs, upwardSingle) =
-          if elevator s < maxFloor
-          then movesFromFloor focusedFloor (floorFromState s (elevator s + 1))
-          else ([], [])
-        upwardStates =
-          if elevator s < maxFloor
-          then updateState 1 s <$> moveList upwardPairs upwardSingle
-          else []
+          emptyBelow = all identity [ L.null (floorFromState s n) | n <- [0 .. max (elevator s - 1) 0] ]
+          (downwardPairs, downwardSingle) =
+            if elevator s > minFloor && not emptyBelow
+            then movesFromFloor focusedFloor (floorFromState s (elevator s - 1))
+            else ([], [])
+          downwardStates =
+            if elevator s > minFloor && not emptyBelow
+            then updateState (-1) s <$> moveList (if L.null downwardSingle then downwardPairs else []) downwardSingle -- Only move a single items down if possible
+            else []
 
-        (downwardPairs, downwardSingle) =
-          if elevator s > minFloor
-          then movesFromFloor focusedFloor (floorFromState s (elevator s - 1))
-          else ([], [])
-        downwardStates =
-          if elevator s > minFloor
-          then updateState (-1) s <$> moveList downwardPairs downwardSingle
-          else []
+          novelStates = (, dist + 1) <$> filter (\k -> not $ k `Set.member` seen) (upwardStates <> downwardStates)
+          seen' = foldl (flip Set.insert) seen (fst <$> novelStates)
 
-        novelStates = filter (\k -> not $ k `M.member` stateGraph) (upwardStates <> downwardStates)
-        stateGraph' = foldl (addStateToGraph s) stateGraph novelStates
-
-        updatedFrontier = frontierStates S.>< S.fromList novelStates
-        in go updatedFrontier stateGraph'
+          updatedFrontier = frontierStates S.>< S.fromList novelStates
+          in go updatedFrontier seen'
 
 addStateToGraph ::
   BoardState -- Origin
@@ -128,7 +133,7 @@ addStateToGraph ::
   -> BoardState -- Destination
   -> StateGraph
 addStateToGraph origin graph destination = let
-  graph' = M.insertWith (const identity ) destination [] graph
+  graph' = M.insertWith (\new existing -> existing <> new) destination [origin] graph -- Using an empty list rather than the origin keeps the graph directed. Should this be a directed graph?
   in M.insertWith (\new existing -> existing <> new) origin [destination] graph'
 
 
@@ -139,7 +144,7 @@ updateState ::
   -> BoardState
 updateState elevatorChange startingState move =
   BS {
-    elevator = elevator startingState + elevatorChange
+    elevator = targetNum
   , bsFloors = updatedFloors
   }
   where
@@ -160,7 +165,7 @@ doMove ::
 doMove t fromFloor toFloor =
   (filter (\a -> not $ a `elem` t) fromFloor, t<>toFloor)
 
--- Determine which moves can be made between two floors
+-- Determine which moves can be made between two floors, making sure both floors are in a valid state afterwards
 movesFromFloor ::
   [Thing]
   -> [Thing]
@@ -168,60 +173,45 @@ movesFromFloor ::
 movesFromFloor fromFloor toFloor =
   (pairedMoves, singleMoves)
   where
-    singleMoves = filter (`canMove` toFloor) fromFloor
-    pairedMoves = filter (`canMovePair` toFloor) thingPairs
+    singleMoves = filter (\thing -> checkFloors (doMove [thing] fromFloor toFloor)) fromFloor
+    pairedMoves = filter (\(a,b) -> checkFloors (doMove [a,b] fromFloor toFloor)) thingPairs
+
+    checkFloors (from, to) = floorIsSafe from && floorIsSafe to
 
     thingPairs = pairs fromFloor
 
--- A move is safe under the following conditions:
--- 1) The item being moved is a chip and the floor contains only chips
--- 2) The item being moved is a generator and the floor contains only generators
--- 3) The item being moved is a chip and its generator is on the target floor
-canMove ::
-  Thing
-  -> [Thing]
+floorIsSafe ::
+  [Thing]
   -> Bool
-canMove thing things =
-  all isChip (thing:things) ||
-  all isGenerator (thing:things) ||
-  balanced
-  where
-    balanced = all (\t -> any (matchedPair t) (thing:things)) (thing:things)
+floorIsSafe things =
+    all (\t -> any (matchedPair t) things) (filter isChip things) || -- All chips are matched to a generator
+    all isChip things || -- The floor is only chips
+    all isGenerator things -- The floor is only generators
 
--- Moving a pair is safe if:
--- 1) This is a matched pair to protect the chip, and the destination floor won't destroy any chips
--- 2) Each element in the pair can move independently
-canMovePair ::
-  (Thing, Thing)
-  -> [Thing]
-  -> Bool
-canMovePair (a,b) things =
-  (matchedPair a b && (balanced || all isGenerator things) ) ||
-  (canMove a (b:things) && canMove b (a:things))
-  where
-    balanced = all (\t -> any (matchedPair t) things) things
+
+moveList tupled single = ((\(a,b) -> [a, b]) <$> tupled) <> ((: []) <$> single)
 
 problem1Input =
   BS {
     elevator = 0
   , bsFloors = M.fromList [
     (0, [
-          Chip "thulium"
-        , Generator "thulium"
-        , Generator "stronium"
-        , Generator "plutonium"
+          Chip "a"
+        , Generator "a"
+        , Generator "b"
+        , Generator "c"
       ]
     ),
     (1, [
-        Chip "plutonium"
-      , Chip "stronium"
+        Chip "c"
+      , Chip "b"
       ]
     ),
     (2, [
-        Generator "promethium"
-      , Chip "promethium"
-      , Generator "ruthenium"
-      , Chip "ruthenium"
+        Generator "d"
+      , Chip "d"
+      , Generator "e"
+      , Chip "e"
     ]),
     (3, [])
     ]
@@ -237,3 +227,8 @@ testInput =
     , (3, [])
     ]
   }
+
+terminalInputState =
+  BS {elevator = 3,
+    bsFloors = M.fromList [(0, []), (1, []), (2, []), (3, concatMap (\c -> [Chip c, Generator c]) ["a", "b", "c", "d", "e"] )]
+    }
