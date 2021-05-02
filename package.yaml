@@ -10,17 +10,18 @@ description:         Please see the README on GitHub at <https://github.com/Chri
 
 dependencies:
 - base >= 4.7 && < 5
-- protolude
-- bytestring
-- hashtables
-- text
-- matrix
-- vector
-- containers
-- unordered-containers
-- mtl
-- hashable
 - array
+- bytestring
+- containers
+- cryptonite
+- hashable
+- hashtables
+- matrix
+- mtl
+- protolude
+- text
+- unordered-containers
+- vector
 
 default-extensions:
   MultiParamTypeClasses
