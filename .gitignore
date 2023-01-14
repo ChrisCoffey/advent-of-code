@@ -1,2 +1,8 @@
-.stack-work/
-aoc.cabal
+**/.stack-work/
+**/aoc.cabal
+**/node_modules
+**/vendor
+**/build
+**/.hdevtools.sock
+.DS_Store
+
