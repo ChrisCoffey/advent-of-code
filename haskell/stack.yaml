@@ -1,5 +1,8 @@
 resolver: lts-20.6
 
+install-ghc: false
+system-ghc: true
+
 # Local packages, usually specified by relative directory name
 packages:
 - '.'

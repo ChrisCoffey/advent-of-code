@@ -48,16 +48,13 @@ library:
 tests:
   aoc:
     main:                Spec.hs
-    source-dirs:         test
-    other-modules:
-        IndexedTests
-        NQueensTests
+    source-dirs:         spec
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - algo-study
+    - aoc
     - tasty
     - tasty-hunit
     - tasty-quickcheck
