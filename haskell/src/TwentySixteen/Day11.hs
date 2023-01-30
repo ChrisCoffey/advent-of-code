@@ -80,31 +80,59 @@ breadthFirstSearch finalState seenPositions (move:moves)
   | solution (node move) = depth move
   | otherwise = let
     d = depth move
-    nextMoves = \n -> Move n (d+1) <$> (validNodes $ node move)
+    nextMoves = (\n -> Move n (d+1)) <$> (validNodes $ node move)
     in breadthFirstSearch finalState updatedPositions nextMoves
 
   where
     -- Generate all one or two item permutations from the current floor
-    validNodes (Node (building, FirstF)) = map (atFloor SecondF) $ allMoveSets (secondF building) (groundF building)
+    validNodes (Node (building, FirstF)) =
+      atFloor SecondF . applyMove building FirstF SecondF <$>  allMoveSets  (groundF building) (secondF building)
     validNodes (Node (building, SecondF)) = let
-      movesDown = atFloor FirstF <$> allMoveSets (groundF building) (secondF building)
-      movesUp = atFloor ThirdF <$> allMoveSets (thirdF building) (secondF building)
+      movesDown = atFloor FirstF . applyMove building SecondF FirstF <$> allMoveSets (secondF building) (groundF building)
+      movesUp = atFloor ThirdF . applyMove building SecondF ThirdF <$> allMoveSets (secondF building) (thirdF building)
       in movesDown <> movesUp
     validNodes (Node (building, ThirdF)) = let
-      movesDown = atFloor SecondF <$> allMoveSets (secondF building) (thirdF building)
-      movesUp = atFloor FourthF <$> allMoveSets (fourthF building) (thirdF building)
+      movesDown = atFloor SecondF . applyMove building ThirdF SecondF <$> allMoveSets (thirdF building) (secondF building)
+      movesUp = atFloor FourthF . applyMove building ThirdF FourthF <$> allMoveSets (thirdF building) (fourthF building)
       in movesDown <> movesUp
-    validNodes (Node (building, FourthF)) = map (\b -> Node (b, ThirdF)) $ allMoveSets (thirdF building) (fourthF building)
+    validNodes (Node (building, FourthF)) =
+      atFloor ThirdF . applyMove building FourthF ThirdF <$> allMoveSets (fourthF building) (thirdF building)
 
-    allMoveSets (Floor destChips destGens) (Floor chips gens) = let
-      oneChip = (\c -> Floor (c <> destChips) destGens) <$> chips `choose` 1
-      twoeChips = (\cs -> Floor (cs <> destChips) destGens) <$>  chips `choose` 2
-      oneGen = (\g -> Floor destChips (g <> destGens)) <$> gens`choose` 1
-      twoGens = (\gs -> Floor destChips (gs <> destGens)) <$> gens`choose` 2
-      mixed = (\(c,g) -> Floor (c: destChips) (g:destGens)) <$> pairwisePerms chips gens
+
+
+    -- This function needs to not only render the new floor, but also the old floor without the moved values
+    -- then apply those changes to the building itself
+    allMoveSets :: Floor -> Floor -> [(Floor, [Text], [Text])]
+    allMoveSets (Floor chips gens) (Floor destChips destGens)  = let
+      oneChip = (\c -> (Floor (c <> destChips) destGens, c, [])) <$> chips `choose` 1
+      twoeChips = (\cs -> (Floor (cs <> destChips) destGens, cs, [])) <$>  chips `choose` 2
+      oneGen = (\g -> (Floor destChips (g <> destGens), [], g)) <$> gens`choose` 1
+      twoGens = (\gs -> (Floor destChips (gs <> destGens), [], gs)) <$> gens`choose` 2
+      mixed = (\(c,g) -> (Floor (c: destChips) (g:destGens), [c], [g])) <$> pairwisePerms chips gens
       in oneChip <> twoeChips <> oneGen <> twoGens <> mixed
 
+    applyMove :: Building -> ElevatorPosition -> ElevatorPosition -> (Floor, [Text], [Text]) -> Building
+    applyMove building FirstF SecondF (f, removeChips, removeGens) =
+      building { secondF = f, groundF = removeFromFloor (groundF building) removeChips removeGens }
+    applyMove building SecondF FirstF (f, removeChips, removeGens) =
+      building {  groundF = f, secondF = removeFromFloor (secondF building) removeChips removeGens }
+    applyMove building SecondF ThirdF (f, removeChips, removeGens) =
+      building { thirdF = f, secondF = removeFromFloor (secondF building) removeChips removeGens }
+    applyMove building ThirdF SecondF (f, removeChips, removeGens) =
+      building { secondF = f, thirdF = removeFromFloor (thirdF building) removeChips removeGens }
+    applyMove building ThirdF FourthF (f, removeChips, removeGens) =
+      building { fourthF = f, thirdF = removeFromFloor (thirdF building) removeChips removeGens }
+    applyMove building FourthF ThirdF (f, removeChips, removeGens) =
+      building { thirdF = f, fourthF = removeFromFloor (fourthF building) removeChips removeGens }
+
+    removeFromFloor from removeChips removeGens = let
+      fromChips = chips from L.\\ removeChips
+      fromGens = generators from L.\\ removeGens
+      in  Floor fromChips fromGens
+
+
     -- TODO update the floor in the building
+    atFloor :: ElevatorPosition -> Building -> Node
     atFloor f b = Node (b, f)
 
     updatedPositions = Set.insert (node move) seenPositions
