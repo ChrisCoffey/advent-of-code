@@ -16,9 +16,11 @@ dependencies:
 - cryptonite
 - hashable
 - hashtables
+- heap
 - matrix
 - mtl
 - protolude
+- psqueues
 - text
 - unordered-containers
 - vector
