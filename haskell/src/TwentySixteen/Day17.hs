@@ -63,6 +63,36 @@ search queue path@(State (pos, txt))
     Just (_,_, path', nextQueue) = Q.minView queue'
     in search nextQueue path'
 
+runPart2 ::
+  Text
+  -> Int
+runPart2 input =
+  maximum $ pathLength <$> longestPath Q.empty (Just (State (start, input)))
+  where
+    pathLength (State (_, p)) = T.length $ T.drop (T.length input) p
+
+-- accumulate a list of paths
+longestPath ::
+  Q.IntPSQ ManhattanDistance Path
+  -> Maybe Path
+  -> [Path]
+longestPath queue path =
+  case Q.minView queue' of
+    Just (_,_, path', nextQueue) | atFinish path' ->
+      -- this isn't quite right. This is already a completed path. Need to find the next one?
+      path' : longestPath nextQueue Nothing
+    Just (_,_, path', nextQueue) ->
+      longestPath nextQueue (Just path')
+    Nothing ->
+      [] -- The queue is empty. We're done
+
+  where
+    queue' =
+      case path of
+        Just pth@(State (pos, txt)) ->
+          foldr (\p q -> Q.insert (pathKey p) ( priority p * (-1)) p q) queue $ nextSteps pth
+        Nothing ->
+          queue
 
 -- What should the key be?
 pathKey :: Path -> Int
