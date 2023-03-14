@@ -18,6 +18,7 @@ dependencies:
 - hashtables
 - heap
 - matrix
+- megaparsec
 - mtl
 - protolude
 - psqueues

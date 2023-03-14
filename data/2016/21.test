@@ -1,0 +1,8 @@
+move position 2 to position 6
+reverse positions 3 through 7
+rotate left 6 steps
+swap position 6 with position 3
+swap letter g with letter b
+rotate right 4 steps
+rotate right 1 step
+rotate based on position of letter h
