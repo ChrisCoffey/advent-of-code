@@ -28,12 +28,14 @@ run ::
 run prog@(Program (instPtr, instructions, registers)) resultRegister
   | instPtr > maxInstr = registers IM.! resultRegister
   | otherwise = let
-    instruction = instructions IM.! instPtr
-    -- prog' = trace (((show instruction) :: T.Text) <> (show registers)) $  interpret prog instruction
-    prog' = interpret prog instruction
+    optimizedProg@(Program (instPtrO, _, _)) = optimize prog nextSix
+    instruction = instructions IM.! instPtrO
+    prog' = trace (((show instruction) :: T.Text) <> (show registers) <> (show nextSix)) $  interpret optimizedProg instruction
+    -- prog' = interpret prog instruction
     in run prog' resultRegister
   where
     (maxInstr, _) = IM.findMax instructions
+    nextSix = [instructions IM.! x | x <- [instPtr..instPtr+5]]
 
 
 
@@ -82,8 +84,32 @@ interpret (Program (instPtr, instructions, registers)) (Tgl reg) = let
   in if (instPtr + regValue) > maxInstr
      then Program (instPtr + 1, instructions, registers)
      else Program (instPtr +1, instructions', registers)
+
 interpret (Program (instPtr, instructions, registers)) _ =
   Program (instPtr + 1, instructions, registers)
+
+
+optimize ::
+  Program
+  -> [Instruction]
+  -> Program
+optimize (Program (4, instructions, registers)) [
+  Cpy (Left 1) (Left 2) ,
+  Inc 0,
+  Dec 2,
+  Jnz (Left 2) (Right (-2)),
+  Dec 3,
+  Jnz (Left 3) (Right (-5))] =
+  let
+    b = registers IM.! 1
+    c = registers IM.! 2
+    d = registers IM.! 3
+    registers' = IM.fromList [(0, c*d), (1, b), (2,0), (3,0)]
+  in  Program (10, instructions, registers')
+
+  -- ^ This is a multiplication loop
+optimize prog rest = prog
+
 
 
 parseInstructions ::
@@ -94,7 +120,7 @@ parseInstructions fileName = do
   let rawWords = words <$> rawLines
       rawInstrutions = toInstruction <$> rawWords
       instructions = IM.fromList $ zip [0..] rawInstrutions
-      registers = IM.fromList $ [(0, 7), (1,0), (2, 1), (3, 0)]
+      registers = IM.fromList $ [(0, 12), (1,0), (2, 0), (3, 0)]
   pure $ Program (0, instructions, registers)
   where
     toInstruction :: [Text] -> Instruction
@@ -128,3 +154,5 @@ parseInstructions fileName = do
     charToRegister "d" = 3
     charToRegister _ = -1
 
+part2 :: IO ()
+part2 = putStrLn ("Pencil + paper turned out to be: 12! + (73 * 79)"::Text)
