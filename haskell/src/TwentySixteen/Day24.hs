@@ -25,7 +25,7 @@ newtype Maze = Maze (Seq (Seq Char))
 newtype Step = Step (Int, Cell)
   deriving (Eq, Ord, Show)
 
-type Frontier = PSQ.OrdPSQ Step Int Cell
+type Frontier = Seq Step
 
 loadInput ::
   FilePath
@@ -50,27 +50,31 @@ buildEdges ::
 buildEdges maze startChar =
   let c = locationInMaze startChar maze
   in case c of
-    Nothing -> []
-    Just cell -> filter (not . selfEdge) $ explore maze (PSQ.singleton (Step (0, cell)) 0 cell) <*> [cell]
-  where
-    selfEdge (Edge start end _) = start == end
+    Nothing ->
+      []
+    Just cell ->
+      explore maze (Seq.singleton (Step (0, cell))) S.empty <*> [cell]
 
 explore ::
   Maze
   -> Frontier
+  -> S.Set Cell
   -> [Cell -> Edge]
-explore maze frontier =
-  case PSQ.findMin frontier of
-    Just ((Step (dist, c)), p, _) ->
-      let nextCells = cellsToVisit maze c
-          popped = PSQ.deleteMin frontier
-          frontier' = foldl (\acc c' -> PSQ.insert (Step (dist+1, c')) (dist+1) c' acc) popped nextCells
-      in
-        if pointOfInterest maze c
-        then (\start -> Edge {start = start, end = c, weight = dist}) : explore maze frontier'
-        else explore maze frontier'
+explore maze frontier seenCache =
+  case Seq.viewl frontier of
+    ((Step (dist, cell)) Seq.:< rest) | S.member cell seenCache ->
+      explore maze rest seenCache
 
-    Nothing ->
+    ((Step (dist, cell)) Seq.:< rest) ->
+      let nextCells = cellsToVisit maze cell
+          frontier' = rest Seq.>< Seq.fromList ((\c -> Step (dist+1, c)) <$> nextCells)
+          seenCache' = S.insert cell seenCache
+      in
+        if pointOfInterest maze cell
+        then (\start -> Edge {start = start, end = cell, weight = dist}) : explore maze frontier' seenCache'
+        else explore maze frontier' seenCache'
+
+    Seq.EmptyL ->
       []
 
 pointOfInterest ::
