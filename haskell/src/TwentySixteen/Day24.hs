@@ -1,6 +1,7 @@
 module TwentySixteen.Day24 where
 
 import Protolude
+import qualified Data.Map as M
 import qualified Data.OrdPSQ as PSQ
 import qualified Data.Set as S
 import qualified Data.Sequence as Seq
@@ -27,6 +28,40 @@ newtype Step = Step (Int, Cell)
 
 type Frontier = Seq Step
 
+-- This doesn't work because it doesn't track the sense of "start" and position that
+-- the problem entails
+kruskalls ::
+  Graph
+  -> [Edge]
+kruskalls (Graph edges) =
+  step vertexSet sortedEdges
+  where
+    sortedEdges = Seq.sortOn weight edges
+    allVertices = S.fromList . toList $ (end <$> edges) <> (start <$> edges)
+    vertexSet = M.fromSet S.singleton allVertices
+
+    step vertices edgeSet =
+      case Seq.viewl edgeSet of
+        Seq.EmptyL -> []
+        (edge Seq.:< remainingEdges) -> let
+          s = vertices M.! (start edge)
+          e = vertices M.! (end edge)
+          unioned = S.union s e
+          vertices' = M.insert (start edge) unioned vertices
+          vertices'' = M.insert (end edge) unioned vertices'
+          in
+          if s /= e
+          then edge : step vertices'' remainingEdges
+          else step vertices remainingEdges
+
+greedySolve ::
+  Graph
+  -> Cell
+  -> [Edge]
+greedySolve _ _= []
+
+
+
 loadInput ::
   FilePath
   -> IO Maze
@@ -41,7 +76,7 @@ buildGraph ::
   Maze
   -> Graph
 buildGraph maze =
-  Graph . Seq.fromList $ concatMap (buildEdges maze) waypoints
+  Graph . Seq.fromList . filter (\e -> start e /= end e) $ concatMap (buildEdges maze) waypoints
 
 buildEdges ::
   Maze
@@ -82,8 +117,7 @@ pointOfInterest ::
   -> Cell
   -> Bool
 pointOfInterest (Maze maze) (Cell (y, x)) =
-  let c = Seq.index (Seq.index maze y) x
-  in c `elem` waypoints
+  (`elem` waypoints) $ Seq.index (Seq.index maze y) x
 
 locationInMaze ::
   Char
