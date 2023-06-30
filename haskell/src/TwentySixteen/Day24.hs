@@ -54,13 +54,25 @@ kruskalls (Graph edges) =
           then edge : step vertices'' remainingEdges
           else step vertices remainingEdges
 
+-- Starting from a given cell, build up a list to the next closest edge
+-- Repeat until all cells have been added
+--
+-- Optionally, perform a brute-force serach of the graph since it's so small
 greedySolve ::
   Graph
   -> Cell
   -> [Edge]
-greedySolve _ _= []
-
-
+greedySolve (Graph edges) cell =
+  let
+    eligibleEdges' = Seq.filter (\edge -> end edge /= cell) edges
+    outboundEdges = Seq.filter (\edge -> start edge == cell) eligibleEdges'
+    nextEdges = Seq.sortOn weight outboundEdges
+    in
+      case Seq.viewl nextEdges of
+        (nextEdge Seq.:< _) ->
+          nextEdge : greedySolve (Graph eligibleEdges') (end nextEdge)
+        Seq.EmptyL ->
+          []
 
 loadInput ::
   FilePath
