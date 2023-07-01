@@ -6,6 +6,8 @@ import qualified Data.OrdPSQ as PSQ
 import qualified Data.Set as S
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
+import TwentySixteen.Day21 (HashOp(a))
+import qualified Data.Foldable as Seq
 
 waypoints = ['0', '1', '2', '3', '4', '5', '6', '7']
 
@@ -28,31 +30,38 @@ newtype Step = Step (Int, Cell)
 
 type Frontier = Seq Step
 
--- This doesn't work because it doesn't track the sense of "start" and position that
--- the problem entails
-kruskalls ::
-  Graph
-  -> [Edge]
-kruskalls (Graph edges) =
-  step vertexSet sortedEdges
+-- Only 5k permutations that start with 0, 40k total
+shortestCycle ::
+  Maze
+  -> Cell
+  -> Int
+shortestCycle maze startingCell =
+  minimum $ catMaybes [ pathDistance path | path <- perms ]
   where
-    sortedEdges = Seq.sortOn weight edges
-    allVertices = S.fromList . toList $ (end <$> edges) <> (start <$> edges)
-    vertexSet = M.fromSet S.singleton allVertices
+    (Graph edges) = buildGraph maze
 
-    step vertices edgeSet =
-      case Seq.viewl edgeSet of
-        Seq.EmptyL -> []
-        (edge Seq.:< remainingEdges) -> let
-          s = vertices M.! (start edge)
-          e = vertices M.! (end edge)
-          unioned = S.union s e
-          vertices' = M.insert (start edge) unioned vertices
-          vertices'' = M.insert (end edge) unioned vertices'
-          in
-          if s /= e
-          then edge : step vertices'' remainingEdges
-          else step vertices remainingEdges
+    indexedGraph = let
+        keyed = groupBy (\l r -> start l == start r) . toList $ Seq.sortOn start edges
+        storeOutgoingEdges idx (edge:rest) = M.insert (start edge) (edge:rest) idx
+        idx = foldl storeOutgoingEdges M.empty keyed
+      in idx
+
+    (Just z) = locationInMaze '0' maze
+    -- All paths originating at 0
+    perms = filter ( maybe False (== z ) . head) . permutations . catMaybes $ [ locationInMaze  w maze | w <- waypoints]
+
+    pathDistance [final] = do
+      edges <- M.lookup final indexedGraph
+      edge <- find ((== z) . end) edges
+      pure $ weight edge
+
+    pathDistance (cell:next:rest) = do
+      edges <- M.lookup cell indexedGraph
+      edge <- find ((== next) . end) edges
+      w' <- pathDistance (next:rest)
+      pure $ (weight edge) + w'
+
+
 
 -- Starting from a given cell, build up a list to the next closest edge
 -- Repeat until all cells have been added
