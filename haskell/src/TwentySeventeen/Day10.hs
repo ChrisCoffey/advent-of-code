@@ -1,9 +1,11 @@
 module TwentySeventeen.Day10 where
 
 import Protolude
+import qualified Data.Text as T
 import Data.Array.IO
 import Data.Maybe (fromJust)
-import TwentySixteen.Day21 (HashOp(a))
+import Data.Char (ord)
+import Numeric (showHex)
 
 newtype CurrentPosition = Pos Int
   deriving (Show)
@@ -18,8 +20,8 @@ knotHash ::
   -> KnotList
   -> CurrentPosition
   -> SkipSize
-  -> IO KnotList
-knotHash [] knotted _ _ = pure knotted
+  -> IO (KnotList, CurrentPosition, SkipSize)
+knotHash [] knotted pos skip  = pure (knotted, pos, skip)
 knotHash (jumpDist:rest) knotted (Pos i) (Skip n) = do
   (_, upper) <- getBounds knotted
   let len = upper + 1
@@ -31,6 +33,16 @@ knotHash (jumpDist:rest) knotted (Pos i) (Skip n) = do
 
   let nextPosition = (i + jumpDist + n) `mod` len
   knotHash rest knotted (Pos nextPosition) (Skip (n + 1))
+
+inGroupsOf ::
+  Int
+  -> [a]
+  -> [[a]]
+inGroupsOf _ [] = []
+inGroupsOf n xs = let
+  chunk = take n xs
+  in chunk: inGroupsOf n (drop n xs)
+
 
 
 initialArray :: IO KnotList
@@ -45,3 +57,22 @@ part1 = do
   knotHash [97,167,54,178,2,11,209,174,119,248,254,0,255,1,64,190] arr (Pos 0) (Skip 0)
   getElems arr
 
+
+part2 ::
+  FilePath
+  -> IO Text
+part2 fileName = do
+  rawInput <- T.strip <$> readFile fileName
+  arr <- initialArray
+  let input = ord <$> T.unpack rawInput
+      withSuffix = input <> [17, 31, 73, 47, 23]
+  foldlM (\(arr, p, s) _ -> knotHash withSuffix arr p s) (arr, Pos 0, Skip 0) [1..64]
+  vals <- getElems arr
+  let chunks = inGroupsOf 16 vals
+      reduced = map (\(a:chunk) -> foldl xor a chunk) chunks
+      stringified = concat $ map hexify reduced
+  pure $ T.pack stringified
+  where
+    hexify n
+      | n < 16    = '0': showHex n ""
+      | otherwise = showHex n ""
