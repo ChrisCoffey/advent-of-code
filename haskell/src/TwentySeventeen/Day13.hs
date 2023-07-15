@@ -11,12 +11,19 @@ data Scanner = Scanner {
 } deriving (Eq, Ord, Show)
 
 layerScore ::
-  Scanner
+  Int
+  -> Scanner
   -> Int
-layerScore scanner
-  | (layer scanner) `mod` ((depth scanner -1) *2) == 0 = layer scanner * depth scanner
+layerScore delay scanner
+  | caught delay scanner = layer scanner * depth scanner
   | otherwise = 0
 
+caught ::
+  Int
+  -> Scanner
+  -> Bool
+caught delay scanner =
+  (delay + layer scanner) `mod` ((depth scanner -1) *2) == 0
 
 loadInput ::
   FilePath
@@ -28,4 +35,9 @@ loadInput path = do
   where
     parseScanner = (\[l,d] -> Scanner {depth = d, layer = l}). map parseInteger . splitOn ": "
 
+part1 file = sum . map (layerScore 0) <$> loadInput file
 
+part2 file = do
+  scanners <- loadInput file
+  let t = take 10 [ time | time <- [0..], all not ( caught time <$> scanners)]
+  pure t
