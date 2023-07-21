@@ -67,10 +67,6 @@ part2 = do
   where
     dance inst chars _ = foldl' interpret chars inst
 
-
-
-
-
 parseInput ::
   FilePath
   -> IO (S.Seq Instruction)
