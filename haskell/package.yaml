@@ -35,6 +35,7 @@ default-extensions:
   TupleSections
   DeriveGeneric
   DeriveAnyClass
+  DisambiguateRecordFields
   GeneralizedNewtypeDeriving
   DerivingStrategies
   FunctionalDependencies
