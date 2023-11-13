@@ -6,6 +6,7 @@ import Text.Read (read)
 import Data.Version (parseVersion)
 import Data.Sequence (mapWithIndex, fromList)
 import TwentySeventeen.Day11 (distance)
+import TwentySeventeen.Day14 (input)
 
 
 data Particle =
@@ -25,13 +26,29 @@ stepForward ::
   -> Particle
 stepForward timeSteps particle =
   particle {
-    location = (x + vx, y + vy, z + vy)
-  , velocity = (vx + ax, vy + ay, vz + az)
+    location = (futurePosition x vx ax, futurePosition y vy ay, futurePosition z vz az)
+  , velocity = (vx + (ax * timeSteps), vy + (ay * timeSteps), vz + (az * timeSteps))
+  }
+  where
+    futurePosition coord v a = coord + (v*timeSteps) + ((a* (timeSteps^2)) `div` 2)
+
+    (x, y, z) = location particle
+    (vx, vy, vz) = velocity particle
+    (ax, ay, az) = acceleration particle
+
+singleStep ::
+  Particle
+  -> Particle
+singleStep particle =
+  particle {
+    location =  (x + vx', y + vy', z + vz')
+    , velocity = velocity'
   }
   where
     (x, y, z) = location particle
     (vx, vy, vz) = velocity particle
     (ax, ay, az) = acceleration particle
+    velocity'@(vx', vy', vz') = (vx + ax, vy + ay, vz + az)
 
 -- Find the particle closest to the origin
 closestParticle :: Seq Particle -> Particle
@@ -45,18 +62,30 @@ distanceFromOrigin particle =
   where
     (x, y, z) = location particle
 
--- Filter out those particles that cannot get closer to the origin than they are now
--- stillInContention ::
-
+removeCollissions ::
+  Seq Particle
+  -> Seq Particle
+removeCollissions =
+  fromList . removeCollisions . findCollisions . toList
+  where
+    findCollisions = groupBy (\l r -> location l == location r) . sortOn location
+    removeCollisions = concat . filter ((1 == ). length)
 
 
 part1 :: FilePath -> IO (Seq Particle)
 part1 path = do
   input <- loadData path
-  pure $ simulate 100000 input
+  pure $ simulate 10000000 input
+  where
+    simulate n particles = stepForward n <$> particles
+
+
+part2 :: FilePath -> Int -> IO (Seq Particle)
+part2 path numSteps =
+  simulate numSteps <$> loadData path
   where
     simulate 0 particles = particles
-    simulate n particles = simulate (n-1) $ stepForward <$> particles
+    simulate n particles = simulate (n - 1) . removeCollissions $ singleStep <$> particles
 
 -- data import boilerplate
 
