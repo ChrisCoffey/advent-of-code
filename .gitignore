@@ -6,3 +6,4 @@
 **/.hdevtools.sock
 .DS_Store
 
+**/target
