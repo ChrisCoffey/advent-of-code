@@ -22,3 +22,7 @@ export function doSomeStuff(
   return;
 }
 // TODO: more examples
+//
+export function party(
+  how?
+)
