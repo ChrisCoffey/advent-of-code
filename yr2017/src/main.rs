@@ -1,35 +1,70 @@
 use std::env;
 use std::fs;
+use std::fmt;
 use std::collections::HashMap;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
-enum Grid {
-    TwoBy(String, String),
-    ThreeBy(String, String, String),
-}
-
 fn main() {
-    println!("Hello, world!");
-    let result = solve_day_21("../data/2017/21.tst");
+    let initial_grid = Vec::from([
+                                 String::from(".#."),
+                                 String::from("..#"),
+                                 String::from("###")
+                                 ]);
+
+    let result = solve_day_21(
+        "../data/2017/21.tst",
+        initial_grid.clone(),
+        2
+        );
     println!("{result}");
 }
 
 
-fn solve_day_21(fp: &str) -> String {
-    let data = load_day_21_data(fp);
+fn solve_day_21(fp: &str, initial_state: Vec<String>, num_iterations: i32) -> String {
+    let transformation_rules = load_day_21_data(fp);
+    //for (from, to) in load_day_21_data(fp).iter() {
+    //    println!("{from} -> {to}");
+    //}
 
-    return "{data}".to_string();
+    let mut grid_state = initial_state;
+    for i in 0..num_iterations {
+        grid_state = run_iteration(transformation_rules.clone(), grid_state);
+    }
+
+    return String::from("success?");
 }
 
-fn load_day_21_data(fp: &str) -> HashMap<Grid, Grid>{
+fn run_iteration(rules: HashMap<Vec<String>, Vec<String>>, grid: Vec<String>) -> Vec<String> {
+    let grid_size = grid.len();
+    let num_squares: usize;
+    let square_size: usize;
+    if grid_size % 2 == 0 { square_size = 2; }
+    else {square_size = 3; }
+    num_squares = grid_size / square_size;
+
+    for i in 0..num_squares {
+        for j in 0..grid[i* square_size].len() / square_size {
+            let mut sub_square = Vec::new();
+            for k in 0..square_size {
+                let start = k * square_size;
+                let end = start + square_size;
+            }
+        }
+    }
+
+    grid
+}
+
+fn load_day_21_data(fp: &str) -> HashMap<Vec<String>, Vec<String>>{
     println!("{fp}");
     let raw_data = fs::read_to_string(fp);
     match raw_data {
         Result::Ok(res) => {
-            let mapping_rules: HashMap<Grid, Grid> = HashMap::new();
+            let mut mapping_rules: HashMap<Vec<String>, Vec<String>> = HashMap::new();
             let rules = res.split('\n');
             for rule in rules {
-                add_rule_to_index(&mapping_rules, rule);
+                if rule.len() > 1 { // Ignore trailng newlines
+                    add_rule_to_index(& mut mapping_rules, rule);
+                }
             }
             mapping_rules
         }
@@ -40,62 +75,41 @@ fn load_day_21_data(fp: &str) -> HashMap<Grid, Grid>{
     }
 }
 
-fn add_rule_to_index<'a>(hm: &'a HashMap<Grid, Grid>, rule: &str) -> &'a HashMap<Grid,Grid> {
-    let rule_stages: Vec<&str> = rule.split("=>").collect();
-    let input = to_grid(rule_stages[0].split('/').collect());
-    let output = to_grid(rule_stages[1].split('/').collect());
-
-    let input2 = rotate_grid(input);
-    let input3 = rotate_grid(input2);
-    let input4 = rotate_grid(input3);
-
-    hm.insert(input, output);
-    hm.insert(input2, output);
-    hm.insert(input3, output);
-    hm.insert(input4, output);
-
-    hm
+fn as_string_vec(str: &str, delim: &str) -> Vec<String> {
+    str.split(delim).map(|s| String::from(s)).collect()
 }
 
-fn to_grid(raw: Vec<&str>) -> Grid {
-    let res: Grid;
-    if raw.len() == 2 {
-        res = Grid::TwoBy(
-            String::from(raw[0]),
-            String::from(raw[1])
-            );
-    } else {
-        res = Grid::ThreeBy(
-            String::from(raw[0]),
-            String::from(raw[1]),
-            String::from(raw[2])
-            );
-    }
-    res
+fn add_rule_to_index<'a>(hm: &'a mut HashMap<Vec<String>, Vec<String>>, rule: &str) {
+    let rule_stages: Vec<&str> = rule.split(" => ").collect();
+    let input: Vec<String> = as_string_vec(rule_stages[0], "/");
+    let output: Vec<String> = as_string_vec(rule_stages[1], "/");
+
+    let input2 = rotate_grid(input.clone());
+    let input3 = rotate_grid(input2.clone());
+    let input4 = rotate_grid(input3.clone());
+
+    hm.insert(input, output.clone());
+    hm.insert(input2, output.clone());
+    hm.insert(input3, output.clone());
+    hm.insert(input4, output.clone());
 }
 
 // Rotate a grid 90 degrees counter-clockwise
-fn rotate_grid(grid: Grid) -> Grid {
-    match grid {
-        Grid::TwoBy(r1, r2) => {
-            let letters1: Vec<char> = r1.chars().collect();
-            let letters2: Vec<char> = r2.chars().collect();
-
-            let letters1_ = [letters1[1],letters2[1]].iter().collect();
-            let letters2_ = [letters1[0],letters2[0]].iter().collect();
-
-            Grid::TwoBy(letters1_, letters2_)
+fn rotate_grid(grid: Vec<String>) -> Vec<String>{
+    let mut result: Vec<String> = Vec::new();
+    let mut n = grid.len();
+    for row in 0..grid.len() {
+        n = n-1;
+        let mut row_str = String::new();
+        for i in 0..grid.len() {
+            let char_opt = grid[i].chars().nth(n);
+            match char_opt {
+                Some(c) => row_str.push(c),
+                None => println!("Error!! Grid index out of bounds somehow.")
+            }
         }
-        Grid::ThreeBy(r1, r2, r3) => {
-            let letters1: Vec<char> = r1.chars().collect();
-            let letters2: Vec<char> = r2.chars().collect();
-            let letters3: Vec<char> = r3.chars().collect();
-
-            let letters1_ = [letters1[2], letters2[2], letters3[2]].iter().collect();
-            let letters2_ = [letters1[1],letters2[1], letters3[1]].iter().collect();
-            let letters3_ = [letters1[0],letters2[0], letters3[0]].iter().collect();
-
-            Grid::ThreeBy(letters1_, letters2_, letters3_)
-        }
+        result.push(row_str);
     }
+
+    result
 }
