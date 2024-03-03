@@ -15,9 +15,9 @@ fn main() {
                                  ]);
 
     let result = solve_day_21(
-        "../data/2017/21.tst",
+        "../data/2017/21.txt",
         initial_grid.clone(),
-        2
+        18
         );
     println!("{result}");
 }
@@ -30,19 +30,34 @@ fn solve_day_21(fp: &str, initial_state: Grid, num_iterations: i32) -> String {
     //}
 
     let mut grid_state = initial_state;
-    for i in 0..num_iterations {
+    match transformation_rules.get(&grid_state) {
+        Some(pattern) => grid_state = pattern.clone(),
+        None => println!("ERROR!! coulddn't match initial grid")
+    }
+
+    for i in 0..num_iterations-1 {
         grid_state = run_iteration(transformation_rules.clone(), grid_state);
     }
 
-    return String::from("success?");
+    let grid_bits = grid_set_bits(grid_state.clone());
+    return format!("Results:\n {:?} \n\n {}", grid_state, grid_bits);
+}
+
+fn grid_set_bits(grid: Grid) -> i32 {
+    let mut count = 0;
+    for row in grid {
+        for col in row {
+            if col == '#' { count +=1 ; }
+        }
+    }
+    count
 }
 
 fn run_iteration(rules: Rules, grid: Grid) -> Grid {
     let grid_size = grid.len();
     let squares_per_row : usize;
     let square_size: usize;
-    if grid_size % 2 == 0 { square_size = 2; }
-    else {square_size = 3; }
+    if grid_size % 2 == 0 { square_size = 2; } else {square_size = 3; }
     squares_per_row = grid_size / square_size;
 
     println!("{:?}", grid);
@@ -55,7 +70,7 @@ fn run_iteration(rules: Rules, grid: Grid) -> Grid {
             for x in (r*square_size)..((r+1)*square_size) {
                 let mut row: Row = Vec::new();
                 for y in (c*square_size)..((c+1)*square_size) {
-                    row.push(grid[y][x]);
+                    row.push(grid[x][y]);
                 }
                 sub_grid.push(row);
             }
@@ -67,10 +82,13 @@ fn run_iteration(rules: Rules, grid: Grid) -> Grid {
         }
     }
 
+    println!("{:?}", parts);
+
     // Push all the parts back together
-    let mut result_grid: Grid = Vec::new();
     let new_width = (parts.len() as f32).sqrt().floor() as usize;
     let subgrid_size = parts[0].len();
+
+    let mut result_grid: Grid = vec![Vec::new(); new_width * subgrid_size];
     // Given the list of new sub-grids in parts, pull off `new_width` elems
     // For each "row" of grids
     //  For each row in each grid, push it onto the result grid
@@ -117,6 +135,11 @@ fn add_rule_to_index<'a>(hm: &'a mut Rules, rule: &str) {
     let input: Grid = as_string_vec(rule_stages[0], "/");
     let output: Grid = as_string_vec(rule_stages[1], "/");
 
+    do_add_rule(hm, input.clone(), output.clone());
+    do_add_rule(hm, flip(input), output.clone());
+}
+
+fn do_add_rule<'a>(hm: &'a mut Rules, input: Grid, output: Grid) {
     let input2 = rotate_grid(input.clone());
     let input3 = rotate_grid(input2.clone());
     let input4 = rotate_grid(input3.clone());
@@ -142,4 +165,14 @@ fn rotate_grid(grid: Grid) -> Grid{
     }
 
     result
+}
+
+fn flip(grid: Grid) -> Grid {
+    let mut flipped: Grid = Vec::new();
+    for v in grid {
+        let mut v2 = v.clone();
+        v2.reverse();
+        flipped.push(v2);
+    }
+    flipped
 }
