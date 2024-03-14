@@ -19,9 +19,27 @@ pub enum Direction  {
     Right
 }
 
+
+pub struct StateEvovle<'a> {
+    location: Point,
+    direction: Direction,
+    grid: &'a mut GridEvolve,
+    infections: usize
+}
+pub type RowEvolve = Vec<InfectionStatus>;
+pub type GridEvolve = Vec<RowEvolve>;
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum InfectionStatus {
+    Clean,
+    Weak,
+    Infected,
+    Flagged
+}
+
 pub fn solve_part1(fp: &str) -> usize {
     let iterations: usize = 10000;
-    let mut initial_grid = load_data(&iterations, fp);
+    let mut initial_grid: Grid = load_data(&true, &false, &iterations, fp);
 
     let mut state = State {
         location: initial_location(&initial_grid),
@@ -32,6 +50,28 @@ pub fn solve_part1(fp: &str) -> usize {
 
     for _ in 0..iterations {
         state = run_burst(state);
+    }
+
+    state.infections
+}
+
+pub fn solve_part2(fp: &str) -> usize {
+    let iterations: usize = 10000000;
+    println!("start");
+    let mut initial_grid: GridEvolve =  load_data(&InfectionStatus::Infected, &InfectionStatus::Clean, &(iterations/ 10000), fp);
+
+    println!("grid built");
+
+    let mut state = StateEvovle {
+        location: initial_location(&initial_grid),
+        direction: Direction::Up,
+        grid: &mut initial_grid,
+        infections: 0
+    };
+
+    println!("Starting to loop");
+    for i in 0..iterations {
+        state = run_burst_evolved(state);
     }
 
     state.infections
@@ -90,25 +130,124 @@ fn run_burst(state: State) -> State {
     }
 }
 
+fn run_burst_evolved(state: StateEvovle) -> StateEvovle {
+    let current_cell = state.grid[state.location.y][state.location.x];
+    let next_location: Point;
+    let next_direction: Direction;
 
-pub fn load_data(padding: &usize, fp: &str) -> Grid {
+    match (&state.direction, &current_cell) {
+        // Up
+        (Direction::Up, InfectionStatus::Clean) => {
+            next_direction = Direction::Left;
+            next_location = Point {y: state.location.y, x: state.location.x - 1 }
+        }
+        (Direction::Up, InfectionStatus::Weak) => {
+            next_direction = Direction::Up;
+            next_location = Point {y: state.location.y - 1, x: state.location.x }
+        }
+        (Direction::Up, InfectionStatus::Infected) => {
+            next_direction = Direction::Right;
+            next_location = Point {y: state.location.y, x: state.location.x + 1 }
+        }
+        (Direction::Up, InfectionStatus::Flagged) => {
+            next_direction = Direction::Down;
+            next_location = Point {y: state.location.y + 1, x: state.location.x }
+        }
+
+
+        // Right
+        (Direction::Right, InfectionStatus::Clean) => {
+            next_direction = Direction::Up;
+            next_location = Point {y: state.location.y -1, x: state.location.x }
+        }
+        (Direction::Right, InfectionStatus::Weak) => {
+            next_direction = Direction::Right;
+            next_location = Point {y: state.location.y, x: state.location.x + 1}
+        }
+        (Direction::Right, InfectionStatus::Infected) => {
+            next_direction = Direction::Down;
+            next_location = Point {y: state.location.y + 1, x: state.location.x }
+        }
+        (Direction::Right, InfectionStatus::Flagged) => {
+            next_direction = Direction::Left;
+            next_location = Point {y: state.location.y, x: state.location.x - 1 }
+        }
+
+        // Down
+        (Direction::Down, InfectionStatus::Clean) => {
+            next_direction = Direction::Right;
+            next_location = Point {y: state.location.y, x: state.location.x + 1 }
+        }
+        (Direction::Down, InfectionStatus::Weak) => {
+            next_direction = Direction::Down;
+            next_location = Point {y: state.location.y + 1, x: state.location.x }
+        }
+        (Direction::Down, InfectionStatus::Infected) => {
+            next_direction = Direction::Left;
+            next_location = Point {y: state.location.y, x: state.location.x - 1 }
+        }
+        (Direction::Down, InfectionStatus::Flagged) => {
+            next_direction = Direction::Up;
+            next_location = Point {y: state.location.y - 1, x: state.location.x }
+        }
+
+        // Left
+        (Direction::Left, InfectionStatus::Clean) => {
+            next_direction = Direction::Down;
+            next_location = Point {y: state.location.y + 1, x: state.location.x }
+        }
+        (Direction::Left, InfectionStatus::Weak) => {
+            next_direction = Direction::Left;
+            next_location = Point {y: state.location.y, x: state.location.x - 1}
+        }
+        (Direction::Left, InfectionStatus::Infected) => {
+            next_direction = Direction::Up;
+            next_location = Point {y: state.location.y-1, x: state.location.x }
+        }
+        (Direction::Left, InfectionStatus::Flagged) => {
+            next_direction = Direction::Right;
+            next_location = Point {y: state.location.y, x: state.location.x + 1}
+        }
+    }
+
+    state.grid[state.location.y][state.location.x] = evolve_cell(&current_cell);
+
+    StateEvovle {
+        location: next_location,
+        direction: next_direction,
+        grid: state.grid,
+        infections: state.infections + (if current_cell == InfectionStatus::Weak { 1 } else {0} )
+    }
+
+}
+
+fn evolve_cell(status: &InfectionStatus) -> InfectionStatus {
+    match status {
+        InfectionStatus::Clean => InfectionStatus::Weak,
+        InfectionStatus::Weak => InfectionStatus::Infected,
+        InfectionStatus::Infected => InfectionStatus::Flagged,
+        InfectionStatus::Flagged => InfectionStatus::Clean
+    }
+}
+
+pub fn load_data<A: Clone + Copy>(t: &A, f: &A, padding: &usize, fp: &str) -> Vec<Vec<A>> {
     let raw_data = fs::read_to_string(fp);
     match raw_data {
         Result::Ok(res) => {
-            let mut grid: Grid = Vec::new();
+            let mut grid: Vec<Vec<A>> = Vec::new();
             for line in res.lines() {
-                let before = vec![false; *padding];
-                let after = vec![false; *padding];
-                let full_line = [before, parse_line(line), after].concat();
+                let before = vec![*f; *padding];
+                let after = vec![*f; *padding];
+                let full_line = [before, parse_line(*t, *f, line), after].concat();
                 grid.push(full_line);
             }
             let row_width = grid[0].len();
             let before = vec![
-                vec![false; row_width];
+                vec![*f; row_width];
                 *padding
                 ];
             let after = vec![
-                vec![false; row_width];
+                vec![*f; row_width];
                 *padding
                 ];
             grid = [before, grid, after].concat();
@@ -123,13 +262,13 @@ pub fn load_data(padding: &usize, fp: &str) -> Grid {
     }
 }
 
-fn initial_location(grid: &Grid) -> Point {
+fn initial_location<A>(grid: &Vec<Vec<A>>) -> Point {
     let y_axis = (*grid).len();
     let x_axis = (*grid)[0].len();
 
     Point {y: y_axis / 2, x: x_axis /2 }
 }
 
-fn parse_line(line: &str) -> Vec<bool> {
-    line.chars().map(|c| if c == '#' {true} else {false}).collect()
+fn parse_line<A: Copy>(t: A, f: A, line: &str) -> Vec<A> {
+    line.chars().map(|c| if c == '#' {t} else {f}).collect()
 }

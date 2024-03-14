@@ -22,6 +22,7 @@ fn run_day_21() {
 }
 
 fn run_day_22() {
-    let result = day_22::solve_part1("../data/2017/22.txt");
+    //let result = day_22::solve_part1("../data/2017/22.txt");
+    let result = day_22::solve_part2("../data/2017/22.txt");
     println!("{result}");
 }
