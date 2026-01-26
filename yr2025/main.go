@@ -4,9 +4,8 @@ import "aoc25/days"
 import "fmt"
 
 func main() {
-  day2Input := days.ImportDay2("data/day2.input")
-  fmt.Println(day2Input)
-  score, score2 := days.SolveDay2(day2Input)
+  day3Input := days.ImportDay3("data/day3.input")
+  fmt.Println(day3Input)
+  score := days.SolveDay3Part2(day3Input)
   fmt.Println(score)
-  fmt.Println(score2)
 }
