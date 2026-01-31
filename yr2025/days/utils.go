@@ -17,3 +17,11 @@ func Sign(x int) int {
   if x < 0 { return -1 } 
   return 1
 }
+
+func Filter[A any](xs []A, f func(A) bool) []A {
+  var result []A
+  for _, x := range(xs) {
+    if(f(x)) { result = append(result, x)}
+  }
+  return result
+}
